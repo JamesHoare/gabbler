@@ -31,6 +31,11 @@ import spray.routing.authentication.BasicAuth
 object GabblerService {
 
   /**
+   * Function completing a request when given a list of messages.
+   */
+  type Completer = List[Message] => Unit
+
+  /**
    * Defines JSON support for [[Message]].
    */
   object Message extends DefaultJsonProtocol {
@@ -69,15 +74,18 @@ class GabblerService(interface: String, port: Int) extends HttpServiceActor with
   // format: OFF
     authenticate(BasicAuth(UsernameEqualsPasswordAuthenticator, "Gabbler"))(user =>
       path("api" / "messages")(
-        get(context =>
-          log.debug("User '{}' is asking for messages ...", user.username)
-          // TODO Complete this user's request later, when messages are available!
+        get(
+          produce(instanceOf[List[Message]]){ completer => _ =>
+            log.debug("User '{}' is asking for messages ...", user.username)
+            gabblerFor(user.username) ! completer
+          }
         ) ~
         post(
           entity(as[Message]) { message =>
             complete {
               log.debug("User '{}' has posted '{}'", user.username, message.text)
-              // TODO Dispatch message to all users!
+              val m = message.copy(username = user.username)
+              context.children foreach (_ ! m)
               StatusCodes.NoContent
             }
           }
@@ -88,4 +96,7 @@ class GabblerService(interface: String, port: Int) extends HttpServiceActor with
 
   def staticRoute: Route =
     path("")(getFromResource("web/index.html")) ~ getFromResourceDirectory("web")
+
+  def gabblerFor(username: String): ActorRef =
+    context.child(username) getOrElse context.actorOf(Gabbler.props, username)
 }
