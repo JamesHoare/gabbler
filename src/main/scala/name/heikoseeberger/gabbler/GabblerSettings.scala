@@ -17,6 +17,7 @@
 package name.heikoseeberger.gabbler
 
 import akka.actor.{ ExtendedActorSystem, Extension, ExtensionKey }
+import scala.concurrent.duration.{ Duration, FiniteDuration, MILLISECONDS }
 
 object GabblerSettings extends ExtensionKey[GabblerSettings]
 
@@ -38,4 +39,7 @@ class GabblerSettings(system: ExtendedActorSystem) extends Extension {
    */
   val port: Int =
     system.settings.config getInt "gabbler.port"
+
+  val timeout: FiniteDuration =
+    Duration(system.settings.config getMilliseconds "gabbler.timeout", MILLISECONDS)
 }

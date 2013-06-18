@@ -16,8 +16,9 @@
 
 package name.heikoseeberger.gabbler
 
-import akka.actor.{ ActorLogging, ActorRef, Props }
+import akka.actor.{ ActorLogging, ActorRef, OneForOneStrategy, Props, SupervisorStrategy }
 import akka.io.IO
+import scala.concurrent.duration.FiniteDuration
 import spray.can.Http
 import spray.http.StatusCodes
 import spray.httpx.SprayJsonSupport
@@ -50,8 +51,8 @@ object GabblerService {
   /**
    * Factory for `akka.actor.Props` for [[GabblerService]].
    */
-  def props(interface: String, port: Int): Props =
-    Props(new GabblerService(interface, port))
+  def props(interface: String, port: Int, timeout: FiniteDuration): Props =
+    Props(new GabblerService(interface, port, timeout))
 }
 
 /**
@@ -59,7 +60,7 @@ object GabblerService {
  *   - static resources from the `web` directory
  *   - a REST-ful API under `api/messages/`
  */
-class GabblerService(interface: String, port: Int) extends HttpServiceActor with ActorLogging {
+class GabblerService(interface: String, port: Int, timeout: FiniteDuration) extends HttpServiceActor with ActorLogging {
 
   import GabblerService._
   import SprayJsonSupport._
@@ -98,5 +99,8 @@ class GabblerService(interface: String, port: Int) extends HttpServiceActor with
     path("")(getFromResource("web/index.html")) ~ getFromResourceDirectory("web")
 
   def gabblerFor(username: String): ActorRef =
-    context.child(username) getOrElse context.actorOf(Gabbler.props, username)
+    context.child(username) getOrElse context.actorOf(Gabbler.props(timeout), username)
+
+  override def supervisorStrategy: SupervisorStrategy =
+    OneForOneStrategy() { case _ => SupervisorStrategy.Stop }
 }
