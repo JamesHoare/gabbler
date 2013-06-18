@@ -37,22 +37,26 @@ class Gabbler extends Actor {
 
   import GabblerService._
 
-  var messages: List[Message] = Nil
+  def receive: Receive =
+    waiting
 
-  var storedCompleter: Option[Completer] = None
+  def waiting: Receive = {
+    case completer: Completer => context become waitingForMessage(completer)
+    case message: Message     => context become waitingForCompleter(message :: Nil)
+  }
 
-  def receive: Receive = {
-    case completer: Completer =>
-      if (messages.isEmpty)
-        storedCompleter = Some(completer)
-      else
-        completer(messages)
-    case message: Message =>
-      messages +:= message
-      for (completer <- storedCompleter) {
-        completer(messages)
-        messages = Nil
-        storedCompleter = None
-      }
+  def waitingForMessage(completer: Completer): Receive = {
+    case completer: Completer => context become waitingForMessage(completer)
+    case message: Message     => completeAndWait(completer, message :: Nil)
+  }
+
+  def waitingForCompleter(messages: List[Message]): Receive = {
+    case completer: Completer => completeAndWait(completer, messages)
+    case message: Message     => context become waitingForCompleter(message :: messages)
+  }
+
+  def completeAndWait(completer: Completer, messages: List[Message]): Unit = {
+    completer(messages)
+    context become waiting
   }
 }
